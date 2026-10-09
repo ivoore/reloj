@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reloj E30 BLE</title>
+<style>
+body{font-family:Arial,Helvetica,sans-serif;background:#111;color:#eee;margin:0;padding:14px;max-width:520px;margin:auto}
+h2{color:#befa14;margin:6px 0 12px}
+.c{background:#1b1d1b;border:1px solid #333;border-radius:10px;padding:12px;margin-bottom:12px}
+.c h3{margin:0 0 10px;font-size:15px;color:#befa14}
+.big{font-size:34px;font-weight:bold}
+.s{color:#999;font-size:13px}
+button{background:#2a2d2a;color:#eee;border:1px solid #555;border-radius:8px;padding:10px 12px;margin:3px 2px;font-size:15px}
+button.on,#cn{background:#befa14;color:#111;border-color:#befa14}
+button:disabled{opacity:.4}
+input{background:#111;color:#eee;border:1px solid #555;border-radius:8px;padding:9px;font-size:15px;margin:3px 0;box-sizing:border-box}
+input[type=text],input[type=password]{width:100%}
+input[type=range]{width:100%;padding:0}
+td{padding:3px 10px 3px 0}
+#log{font-family:monospace;font-size:12px;color:#8a8;white-space:pre-wrap;max-height:120px;overflow:auto}
+.hide{display:none}
+</style></head><body>
+<h2>Reloj E30 &middot; Bluetooth</h2>
+
+<div class="c" id="nobt" style="display:none"><b>Este navegador no tiene Web Bluetooth.</b><br>
+<span class="s">Android: abre esta pagina en Chrome. iPhone: usa la app gratuita <b>Bluefy</b> y abre esta direccion ahi.</span></div>
+
+<div class="c"><h3>Conexion</h3>
+<input type="password" id="pin" placeholder="PIN del reloj (por defecto 1234)">
+<button id="cn" onclick="conectar()">Conectar</button>
+<button id="dc" onclick="desconectar()" disabled>Desconectar</button>
+<div class="s" id="st">Desconectado</div></div>
+
+<div id="ui" class="hide">
+<div class="c"><div class="big" id="h">--:--:--</div>
+<div class="s">Origen de la hora: <span id="src">--</span></div></div>
+
+<div class="c"><h3>Fecha y hora</h3>
+<button onclick="horaTel()">Usar la hora de este telefono</button><br>
+<input type="date" id="d"> <input type="time" id="t" step="1">
+<button onclick="horaMan()">Guardar</button></div>
+
+<div class="c"><h3>Watch face</h3>
+<button id="f0" onclick="cmd('FACE 0')">Analogico</button>
+<button id="f1" onclick="cmd('FACE 1')">Digital LCD</button></div>
+
+<div class="c"><h3>Pantalla</h3>
+<button id="s0" onclick="cmd('PANTALLA 0')">Reloj</button>
+<button id="s1" onclick="cmd('PANTALLA 1')">Temperaturas</button>
+<button id="s2" onclick="cmd('PANTALLA 2')">Distancia</button>
+<button id="s3" onclick="cmd('PANTALLA 3')">Info</button></div>
+
+<div class="c"><h3>Brillo: <span id="bv">--</span>%</h3>
+<input type="range" id="b" min="10" max="100" step="5" onchange="cmd('BRILLO '+this.value)"></div>
+
+<div class="c"><h3>Sensores</h3><table>
+<tr><td>H2O salida</td><td id="t1">--</td></tr>
+<tr><td>H2O entrada</td><td id="t2">--</td></tr>
+<tr><td>Aceite</td><td id="t3">--</td></tr>
+<tr><td>Distancia R1 / R2 / R3</td><td id="r">--</td></tr>
+<tr><td>Clima</td><td id="wx">--</td></tr></table></div>
+
+<div class="c"><h3>WiFi de casa (internet)</h3>
+<div class="s">Estado: <span id="w">--</span></div>
+<input type="text" id="ss" placeholder="Nombre de la red (2.4 GHz)">
+<input type="password" id="pw" placeholder="Clave">
+<button onclick="wifi()">Guardar y conectar</button></div>
+
+<div class="c"><h3>Registro</h3><div id="log"></div></div>
+</div>
+
+<script>
+var NUS='6e400001-b5a3-f393-e0a9-e50e24dcca9e', RX='6e400002-b5a3-f393-e0a9-e50e24dcca9e', TX='6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+var dev=null, rx=null, cola=Promise.resolve(), buf='', timer=null, first=true;
+function $(i){return document.getElementById(i)}
+function log(m){var l=$('log');l.textContent=(m+'\n'+l.textContent).slice(0,3000)}
+if(!navigator.bluetooth){$('nobt').style.display='block';$('cn').disabled=true}
+try{$('pin').value=localStorage.getItem('relojPin')||''}catch(e){}
+
+async function conectar(){
+  try{
+    $('st').textContent='Buscando reloj...';
+    dev=await navigator.bluetooth.requestDevice({filters:[{namePrefix:'RELOJ'}],optionalServices:[NUS]});
+    dev.addEventListener('gattserverdisconnected',caido);
+    var srv=await dev.gatt.connect();
+    var svc=await srv.getPrimaryService(NUS);
+    rx=await svc.getCharacteristic(RX);
+    var tx=await svc.getCharacteristic(TX);
+    await tx.startNotifications();
+    tx.addEventListener('characteristicvaluechanged',function(e){recibir(new TextDecoder().decode(e.target.value))});
+    $('st').textContent='Conectado a '+dev.name;
+    $('cn').disabled=true;$('dc').disabled=false;$('ui').className='';first=true;
+    var pin=$('pin').value.trim();
+    try{localStorage.setItem('relojPin',pin)}catch(e){}
+    cmd('PIN '+(pin||'1234'));
+    cmd('ESTADO');
+    timer=setInterval(function(){cmd('ESTADO')},2000);
+  }catch(e){$('st').textContent='No se pudo conectar: '+e.message}
+}
+function desconectar(){if(dev&&dev.gatt.connected)dev.gatt.disconnect()}
+function caido(){clearInterval(timer);rx=null;$('st').textContent='Desconectado';$('cn').disabled=false;$('dc').disabled=true}
+
+// Las operaciones GATT no pueden solaparse: se encolan
+function cmd(c){
+  if(!rx)return;
+  if(c.indexOf('ESTADO')!==0)log('> '+c.replace(/^PIN .*/,'PIN ****').replace(/\|.*/,'|****'));
+  var data=new TextEncoder().encode(c+'\n');
+  cola=cola.then(function(){
+    return rx.writeValueWithResponse?rx.writeValueWithResponse(data):rx.writeValue(data);
+  }).catch(function(e){log('! '+e.message)});
+}
+function recibir(txt){
+  buf+=txt;var i;
+  while((i=buf.indexOf('\n'))>=0){var l=buf.slice(0,i);buf=buf.slice(i+1);linea(l)}
+}
+function linea(l){
+  if(l.indexOf('ST ')!==0){log(l);return}
+  var p=l.slice(3).split('|');
+  $('h').textContent=p[0];$('src').textContent=p[1];
+  for(var i=0;i<2;i++)$('f'+i).className=(p[2]==i)?'on':'';
+  for(var i=0;i<4;i++)$('s'+i).className=(p[3]==i)?'on':'';
+  $('bv').textContent=p[4];
+  if(first){$('b').value=p[4];$('ss').value=p[13]||'';first=false}
+  $('w').textContent=p[5]=='1'?'conectado':(p[13]?'buscando '+p[13]+'...':'sin configurar');
+  function tc(v){return v=='-'?'--':v+' °C'}
+  function dc(v){return v=='-'?'--':(v=='L'?'libre':v+' cm')}
+  $('t1').textContent=tc(p[6]);$('t2').textContent=tc(p[7]);$('t3').textContent=tc(p[8]);
+  $('r').textContent=dc(p[9])+' / '+dc(p[10])+' / '+dc(p[11]);
+  $('wx').textContent=tc(p[12]);
+}
+function p2(n){return (n<10?'0':'')+n}
+function horaTel(){var n=new Date();
+  cmd('HORA '+n.getFullYear()+'-'+p2(n.getMonth()+1)+'-'+p2(n.getDate())+' '+p2(n.getHours())+':'+p2(n.getMinutes())+':'+p2(n.getSeconds()))}
+function horaMan(){var d=$('d').value,t=$('t').value;if(!d||!t){alert('Completa fecha y hora');return}
+  if(t.length==5)t+=':00';cmd('HORA '+d+' '+t)}
+function wifi(){cmd('WIFI '+$('ss').value+'|'+$('pw').value)}
+</script></body></html>
