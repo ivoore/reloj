@@ -42,7 +42,8 @@ td{padding:3px 10px 3px 0}
 <div class="c"><h3>Watch face</h3>
 <button id="f0" onclick="cmd('FACE 0')">Analogico</button>
 <button id="f1" onclick="cmd('FACE 1')">Digital LCD</button>
-<button id="f2" onclick="cmd('FACE 2')">Deportivo</button></div>
+<button id="f2" onclick="cmd('FACE 2')">Deportivo</button>
+<button id="f3" onclick="cmd('FACE 3')">Clasico</button></div>
 
 <div class="c"><h3>Pantalla</h3>
 <button id="s0" onclick="cmd('PANTALLA 0')">Reloj</button>
@@ -117,7 +118,7 @@ function linea(l){
   if(l.indexOf('ST ')!==0){log(l);return}
   var p=l.slice(3).split('|');
   $('h').textContent=p[0];$('src').textContent=p[1];
-  for(var i=0;i<3;i++)$('f'+i).className=(p[2]==i)?'on':'';
+  for(var i=0;i<4;i++)$('f'+i).className=(p[2]==i)?'on':'';
   for(var i=0;i<4;i++)$('s'+i).className=(p[3]==i)?'on':'';
   $('bv').textContent=p[4];
   if(first){$('b').value=p[4];$('ss').value=p[13]||'';first=false}
