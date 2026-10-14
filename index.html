@@ -51,8 +51,15 @@ td{padding:3px 10px 3px 0}
 <button id="s2" onclick="cmd('PANTALLA 2')">Distancia</button>
 <button id="s3" onclick="cmd('PANTALLA 3')">Info</button></div>
 
-<div class="c"><h3>Brillo: <span id="bv">--</span>%</h3>
-<input type="range" id="b" min="10" max="100" step="5" onchange="cmd('BRILLO '+this.value)"></div>
+<div class="c"><h3>Brillo</h3>
+<button id="ba1" onclick="cmd('BRILLO AUTO')">Automatico</button>
+<button id="ba0" onclick="cmd('BRILLO '+$('b').value)">Manual</button>
+<div class="s">Luz ambiente: <span id="lx">--</span></div>
+<div class="s">Brillo manual: <span id="bv">--</span>%</div>
+<input type="range" id="b" min="10" max="100" step="5" onchange="cmd('BRILLO '+this.value)">
+<div class="s">Calibrar la fotorresistencia (una vez): tapa el sensor y pulsa "Oscuro"; luego ilumínalo bien y pulsa "Luz".</div>
+<button onclick="cmd('CALIBRAR OSCURO')">Oscuro</button>
+<button onclick="cmd('CALIBRAR LUZ')">Luz</button></div>
 
 <div class="c"><h3>Sensores</h3><table>
 <tr><td>H2O salida</td><td id="t1">--</td></tr>
@@ -121,6 +128,8 @@ function linea(l){
   for(var i=0;i<4;i++)$('f'+i).className=(p[2]==i)?'on':'';
   for(var i=0;i<4;i++)$('s'+i).className=(p[3]==i)?'on':'';
   $('bv').textContent=p[4];
+  var au=p[14]=='1';$('ba1').className=au?'on':'';$('ba0').className=au?'':'on';
+  $('lx').textContent=(p[15]&&p[15]!='-')?p[15]:'sensor no detectado';
   if(first){$('b').value=p[4];$('ss').value=p[13]||'';first=false}
   $('w').textContent=p[5]=='1'?'conectado':(p[13]?'buscando '+p[13]+'...':'sin configurar');
   function tc(v){return v=='-'?'--':v+' °C'}
