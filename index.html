@@ -16,6 +16,9 @@ input{background:#111;color:#eee;border:1px solid #555;border-radius:8px;padding
 input[type=text],input[type=password]{width:100%}
 input[type=range]{width:100%;padding:0}
 td{padding:3px 10px 3px 0}
+.net{display:flex;justify-content:space-between;align-items:center;background:#111;border:1px solid #333;border-radius:8px;padding:10px;margin:4px 0;cursor:pointer}
+.net.sel{border-color:#befa14}
+.bars{font-family:monospace;color:#befa14;letter-spacing:1px}
 #log{font-family:monospace;font-size:12px;color:#8a8;white-space:pre-wrap;max-height:120px;overflow:auto}
 .hide{display:none}
 </style></head><body>
@@ -70,6 +73,8 @@ td{padding:3px 10px 3px 0}
 
 <div class="c"><h3>WiFi de casa (internet)</h3>
 <div class="s">Estado: <span id="w">--</span></div>
+<button onclick="buscar()">Buscar redes</button> <span class="s" id="scs"></span>
+<div id="nets"></div>
 <input type="text" id="ss" placeholder="Nombre de la red (2.4 GHz)">
 <input type="password" id="pw" placeholder="Clave">
 <button onclick="wifi()">Guardar y conectar</button></div>
@@ -121,7 +126,22 @@ function recibir(txt){
   buf+=txt;var i;
   while((i=buf.indexOf('\n'))>=0){var l=buf.slice(0,i);buf=buf.slice(i+1);linea(l)}
 }
+var redes=[];
+function esc(s){return s.replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function bars(r){var n=r>-55?4:r>-67?3:r>-78?2:1;return '▮'.repeat(n)+'▯'.repeat(4-n)}
+function buscar(){redes=[];$('nets').innerHTML='';$('scs').textContent='buscando... (unos segundos)';cmd('REDES')}
+function pintarRedes(){
+  $('scs').textContent=redes.length?redes.length+' redes, toca una para elegirla':'no se encontraron redes';
+  var h='';redes.forEach(function(n,i){h+='<div class="net" data-i="'+i+'"><span>'+(n.abierta?'':'&#128274; ')+esc(n.ssid)+'</span><span class="bars">'+bars(n.rssi)+'</span></div>'});
+  $('nets').innerHTML=h;
+  Array.prototype.forEach.call(document.querySelectorAll('.net'),function(el){el.onclick=function(){
+    var n=redes[+el.dataset.i];$('ss').value=n.ssid;
+    Array.prototype.forEach.call(document.querySelectorAll('.net'),function(e){e.className='net'});el.className='net sel';
+    if(n.abierta)$('pw').value='';else $('pw').focus()}})
+}
 function linea(l){
+  if(l.indexOf('RED ')===0){var a=l.slice(4).split('|');redes.push({rssi:+a[0],abierta:a[1]=='1',ssid:a.slice(2).join('|')});return}
+  if(l.indexOf('REDES FIN')===0){pintarRedes();return}
   if(l.indexOf('ST ')!==0){log(l);return}
   var p=l.slice(3).split('|');
   $('h').textContent=p[0];$('src').textContent=p[1];
