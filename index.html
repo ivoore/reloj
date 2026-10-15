@@ -28,7 +28,9 @@ td{padding:3px 10px 3px 0}
 <span class="s">Android: abre esta pagina en Chrome. iPhone: usa la app gratuita <b>Bluefy</b> y abre esta direccion ahi.</span></div>
 
 <div class="c"><h3>Conexion</h3>
-<input type="password" id="pin" placeholder="PIN del reloj (por defecto 1234)">
+<input type="password" id="pin" inputmode="numeric" autocomplete="off" placeholder="PIN del reloj (por defecto 1234)">
+<div id="pinmsg" class="s" style="display:none;color:#ff6b5a;margin:4px 0">PIN incorrecto: escribe el PIN que tiene el reloj (BLE_PIN) y pulsa "Enviar PIN".</div>
+<button id="spin" onclick="enviarPin()" disabled>Enviar PIN</button>
 <button id="cn" onclick="conectar()">Conectar</button>
 <button id="dc" onclick="desconectar()" disabled>Desconectar</button>
 <button id="olv" style="display:none" onclick="if(confirm('Olvidar el reloj guardado y buscar de nuevo la proxima vez?'))RelojBle.forget()">Olvidar reloj</button>
@@ -94,6 +96,13 @@ if(!navigator.bluetooth&&!NATIVE){$('nobt').style.display='block';$('cn').disabl
 if(NATIVE){document.querySelector('h2').innerHTML='Reloj E30';$('olv').style.display='inline-block'}
 try{$('pin').value=localStorage.getItem('relojPin')||''}catch(e){}
 
+var pinOK=false;
+function enviarPin(){
+  var pin=$('pin').value.trim();
+  try{localStorage.setItem('relojPin',pin)}catch(e){}
+  cmd('PIN '+(pin||'1234'));
+  cmd('ESTADO');
+}
 // Conexion lista (navegador o app): PIN, estado y sondeo cada 2 s
 function listo(nombre){
   $('st').textContent='Conectado a '+nombre;
@@ -101,16 +110,18 @@ function listo(nombre){
   var pin=$('pin').value.trim();
   try{localStorage.setItem('relojPin',pin)}catch(e){}
   clearInterval(timer);
+  pinOK=false;$('spin').disabled=false;
   cmd('PIN '+(pin||'1234'));
   cmd('ESTADO');
-  timer=setInterval(function(){cmd('ESTADO')},2000);
+  timer=setInterval(function(){if(pinOK)cmd('ESTADO')},2000);
 }
 // Eventos que manda la app Android
 window.bleEvent=function(t,d){
   if(t=='status')$('st').textContent=d;
   else if(t=='connected'){nativeOK=true;listo(d)}
-  else if(t=='disconnected'){nativeOK=false;clearInterval(timer);$('cn').disabled=false;$('dc').disabled=true}
+  else if(t=='disconnected'){nativeOK=false;clearInterval(timer);$('cn').disabled=false;$('dc').disabled=true;$('spin').disabled=true}
   else if(t=='line')linea(d);
+  else if(t=='log')log(d);
 };
 async function conectar(){
   if(NATIVE){$('cn').disabled=true;RelojBle.connect();return}
@@ -128,7 +139,7 @@ async function conectar(){
   }catch(e){$('st').textContent='No se pudo conectar: '+e.message}
 }
 function desconectar(){if(NATIVE){RelojBle.disconnect();return}if(dev&&dev.gatt.connected)dev.gatt.disconnect()}
-function caido(){clearInterval(timer);rx=null;$('st').textContent='Desconectado';$('cn').disabled=false;$('dc').disabled=true}
+function caido(){clearInterval(timer);rx=null;$('spin').disabled=true;$('st').textContent='Desconectado';$('cn').disabled=false;$('dc').disabled=true}
 
 // Las operaciones GATT no pueden solaparse: se encolan
 function cmd(c){
@@ -158,6 +169,11 @@ function pintarRedes(){
     if(n.abierta)$('pw').value='';else $('pw').focus()}})
 }
 function linea(l){
+  if(l.indexOf('OK PIN')===0){pinOK=true;$('pinmsg').style.display='none';$('pin').style.borderColor='';log(l);return}
+  if(l.indexOf('ERR PIN')===0||l.indexOf('ERR primero')===0){
+    if(l.indexOf('ERR primero')===0&&!pinOK&&$('pinmsg').style.display=='block')return;   // no repetir
+    pinOK=false;$('pinmsg').style.display='block';$('pin').style.borderColor='#ff6b5a';
+    $('st').textContent='Conectado, pero el PIN no coincide';log(l);return}
   if(l.indexOf('RED ')===0){var a=l.slice(4).split('|');redes.push({rssi:+a[0],abierta:a[1]=='1',ssid:a.slice(2).join('|')});return}
   if(l.indexOf('REDES FIN')===0){pintarRedes();return}
   if(l.indexOf('ST ')!==0){log(l);return}
