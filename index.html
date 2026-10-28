@@ -36,7 +36,8 @@ td{padding:3px 10px 3px 0}
 
 <div id="ui" class="hide">
 <div class="c"><div class="big" id="h">--:--:--</div>
-<div class="s">Origen de la hora: <span id="src">--</span></div></div>
+<div class="s">Origen de la hora: <span id="src">--</span></div>
+<div class="s">Reloj RTC (DS3231): <span id="rtc">--</span></div></div>
 
 <div class="c"><h3>Fecha y hora</h3>
 <button onclick="horaTel()">Usar la hora de este telefono</button><br>
@@ -49,7 +50,8 @@ td{padding:3px 10px 3px 0}
 <button id="f2" onclick="cmd('FACE 2')">Deportivo</button>
 <button id="f3" onclick="cmd('FACE 3')">Clasico</button>
 <button id="f4" onclick="cmd('FACE 4')">Noticias</button>
-<button id="f5" onclick="cmd('FACE 5')">Cronografo</button></div>
+<button id="f5" onclick="cmd('FACE 5')">Crono-auto</button>
+<button id="f6" onclick="cmd('FACE 6')">Crono</button></div>
 
 <div class="c"><h3>Pantalla</h3>
 <button id="s0" onclick="cmd('PANTALLA 0')">Reloj</button>
@@ -76,6 +78,8 @@ td{padding:3px 10px 3px 0}
 
 <div class="c"><h3>WiFi de casa (internet)</h3>
 <div class="s">Estado: <span id="w">--</span></div>
+<div class="s" style="margin-top:6px">Redes guardadas (el reloj se conecta solo a cualquiera de ellas):</div>
+<div id="kn"></div>
 <button onclick="buscar()">Buscar redes</button> <span class="s" id="scs"></span>
 <div id="nets"></div>
 <input type="text" id="ss" placeholder="Nombre de la red (2.4 GHz)">
@@ -158,12 +162,12 @@ function bars(r){var n=r>-55?4:r>-67?3:r>-78?2:1;return '▮'.repeat(n)+'▯'.re
 function buscar(){redes=[];$('nets').innerHTML='';$('scs').textContent='buscando... (unos segundos)';cmd('REDES')}
 function pintarRedes(){
   $('scs').textContent=redes.length?redes.length+' redes, toca una para elegirla':'no se encontraron redes';
-  var h='';redes.forEach(function(n,i){h+='<div class="net" data-i="'+i+'"><span>'+(n.abierta?'':'&#128274; ')+esc(n.ssid)+'</span><span class="bars">'+bars(n.rssi)+'</span></div>'});
+  var h='';redes.forEach(function(n,i){h+='<div class="net" data-i="'+i+'"><span>'+(known.indexOf(n.ssid)>=0?'&#9733; ':'')+(n.abierta?'':'&#128274; ')+esc(n.ssid)+'</span><span class="bars">'+bars(n.rssi)+'</span></div>'});
   $('nets').innerHTML=h;
   Array.prototype.forEach.call(document.querySelectorAll('.net'),function(el){el.onclick=function(){
-    var n=redes[+el.dataset.i];$('ss').value=n.ssid;
+    var n=redes[+el.dataset.i];$('ss').value=n.ssid;$('pw').value='';$('pw').placeholder=known.indexOf(n.ssid)>=0?'Guardada: deja la clave vacia':'Clave';
     Array.prototype.forEach.call(document.querySelectorAll('.net'),function(e){e.className='net'});el.className='net sel';
-    if(n.abierta)$('pw').value='';else $('pw').focus()}})
+    if(n.abierta||known.indexOf(n.ssid)>=0)$('pw').value='';else $('pw').focus()}})
 }
 function linea(l){
   if(l.indexOf('OK PIN')===0){
@@ -180,7 +184,9 @@ function linea(l){
   if(l.indexOf('ST ')!==0){log(l);return}
   var p=l.slice(3).split('|');
   $('h').textContent=p[0];$('src').textContent=p[1];
-  for(var i=0;i<6;i++)$('f'+i).className=(p[2]==i)?'on':'';
+  var RS=['NO DETECTADO','OK','HORA PERDIDA: REVISA LA PILA','OK (tuvo un corte)'];$('rtc').textContent=p[16]!=null?RS[+p[16]]||'--':'--';
+  var kk=(p[17]||'').split(';').filter(function(x){return x});if(kk.join(';')!=known.join(';')){known=kk;pintarGuardadas()}
+  for(var i=0;i<7;i++)$('f'+i).className=(p[2]==i)?'on':'';
   for(var i=0;i<4;i++)$('s'+i).className=(p[3]==i)?'on':'';
   $('bv').textContent=p[4];
   var au=p[14]=='1';$('ba1').className=au?'on':'';$('ba0').className=au?'':'on';
@@ -198,6 +204,13 @@ function horaTel(){var n=new Date();
   cmd('HORA '+n.getFullYear()+'-'+p2(n.getMonth()+1)+'-'+p2(n.getDate())+' '+p2(n.getHours())+':'+p2(n.getMinutes())+':'+p2(n.getSeconds()))}
 function horaMan(){var d=$('d').value,t=$('t').value;if(!d||!t){alert('Completa fecha y hora');return}
   if(t.length==5)t+=':00';cmd('HORA '+d+' '+t)}
-function wifi(){cmd('WIFI '+$('ss').value+'|'+$('pw').value)}
+
+var known=[];
+function pintarGuardadas(){
+  var h='';known.forEach(function(k){h+='<div class="net"><span>&#9733; '+esc(k)+'</span><button onclick="olvidar(\''+encodeURIComponent(k).replace(/'/g,'%27')+'\')">Olvidar</button></div>'});
+  $('kn').innerHTML=h||'<div class="s">Ninguna todavia: se guardan solas cuando conectan bien.</div>';
+}
+function olvidar(k){k=decodeURIComponent(k);if(confirm('Olvidar '+k+'?'))cmd('OLVIDAR '+k)}
+function wifi(){var p=$('pw').value;cmd('WIFI '+$('ss').value+(p?'|'+p:''))}
 if(NATIVE)setTimeout(conectar,300);      // la app se conecta sola al abrir
 </script></body></html>
